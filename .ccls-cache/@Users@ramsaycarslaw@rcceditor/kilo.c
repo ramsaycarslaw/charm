@@ -123,7 +123,14 @@ char *GO_HL_keywords[] = {
   "int64|","import|", NULL
 };
 
-char *PY_HL_extensions[] = {".py", NULL};
+char *MT_HL_extensions[] = {".MT", ".mt", NULL};
+char *MT_HL_keywords[] = {
+  "if", "else", "fn", "print", "return", "len|", "printf|", "println|", "read|",
+  "write|", "clock|", "string|", "number|", "color|", "for", "while", "exit|", "clear|", "show|", "Cd|", "Ls|", "input|", "append|", "delete|", "var", NULL
+};
+
+                         char *
+                         PY_HL_extensions[] = {".py", NULL};
 char *PY_HL_keywords[] = {"import", "def", "print", "if", "elif", "else", "int|", "str|", "float|", NULL};
 
 struct editorSyntax HLDB[] = {
@@ -132,7 +139,7 @@ struct editorSyntax HLDB[] = {
     C_HL_extensions,
     C_HL_keywords,
     "//", "/*", "*/",
-    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS 
   },
   {
     ".go",
@@ -140,6 +147,13 @@ struct editorSyntax HLDB[] = {
     GO_HL_keywords,
     "//", "/*", "*/",
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC
+  },
+  {
+    "MT",
+    MT_HL_extensions,
+    MT_HL_keywords,
+    "//", "/*", "*/",
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
   },
   {
     ".py",
@@ -594,7 +608,7 @@ void editorAutoPair(char c) {
       editorRowInsertChar(row, E.cx, '{');
       E.cx += 3;
       editorRowInsertChar(row, E.cx, '}');
-      return;
+     return;
     } else if (c == '(') {
       editorRowInsertChar(row, E.cx, '(');
       E.cx += 3;
@@ -630,7 +644,7 @@ char *wordFromCursor(erow *row) {
   int x = E.cx;
   int prev_sep;
   int i = x;
-  char *result = '\0';
+  char *result = "\0";
 
   // backtack to find last space
   while (!is_separator(row->chars[i])) {
@@ -724,7 +738,7 @@ void editorInsertSuggestions() {
     int i, j, ctr;
     char words[32][32];
     char *str = row->chars;
-    char *buf = '\0';
+    char *buf = "\0";
     int len = row->size;
 
     j=0; ctr=0;
@@ -740,7 +754,7 @@ void editorInsertSuggestions() {
     }
 
     buf = E.suggestions;
-    int temp;
+    int temp = 0;
 
     for (i = 0; i < 32; i++) {
       if (startsWith(words[i], buf)) {
@@ -844,6 +858,42 @@ void editorDeleteChar() {
   }
 }
 
+void editorChangeInner() {  
+   erow *row = &E.row[E.cy];
+
+   if (E.cx == row->size) {
+     return;
+   }
+
+   for (int i = 0; i < row->size; i++)
+   {
+     if (row->chars[i] == '(')
+     {
+       E.cx = i+1;
+       while (row->chars[E.cx] != ')')
+       {
+	 editorRowDeleteChar(row, E.cx);
+       }
+     }
+
+     if (row->chars[i] == '[')
+     {
+       E.cx = i+1;
+       while (row->chars[E.cx] != ']')
+       {
+	 editorRowDeleteChar(row, E.cx);
+       }
+     }
+     if (row->chars[i] == '{') {
+       E.cx = i + 1;
+       while (row->chars[E.cx] != '}') {
+         editorRowDeleteChar(row, E.cx);
+       }
+     }
+   }
+   return;
+}
+
 /*** file i/o ***/
 
 char *editorRowsToString(int *buflen) {
@@ -885,12 +935,12 @@ void editorOpen(char *filename) {
   E.dirty = 0;
 }
 
+
 void editorOpenNew() {
   char *file = editorPrompt("path/to/file: %s", NULL);
   if (E.filename == NULL) {
     editorOpen(file);
   } else {
-    editorClearScreen();
     editorOpen(file);
   }
 }
@@ -1262,7 +1312,8 @@ void editorProcessKeypress() {
       break;
     case CTRL_KEY('l'):
       editorCenter();
-    case CTRL_KEY('s'):
+      break;  
+    case CTRL_KEY('x'):
       editorSave();
       break;
   case '\t':
@@ -1280,11 +1331,15 @@ void editorProcessKeypress() {
         E.cx = E.row[E.cy].size;
       break;
 
-    case CTRL_KEY('f'):
+    case CTRL_KEY('s'):
       editorFind();
       break;
     case CTRL_KEY('o'):
       editorOpenNew();
+      break;
+    case CTRL_KEY('c'):
+      editorChangeInner();
+      break;
     case '{':
     case '"':
     case '(':
@@ -1292,7 +1347,7 @@ void editorProcessKeypress() {
     case '[':
     case '<':
       editorAutoPair(c);
-    
+      break;
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
@@ -1342,8 +1397,8 @@ void initEditor() {
   E.numrows = 0;
   E.row = NULL;
   E.dirty = 0;
-  E.autopair = 1;
-  E.auto_complete = 1;
+  E.autopair = 0;
+  E.auto_complete = 0;
   E.suggestion = 0;
   E.filename = NULL;
   E.suggestions = NULL;
@@ -1369,9 +1424,9 @@ int main(int argc, char *argv[]) {
   while (1) {
     editorRefreshScreen();
     editorProcessKeypress();
-    if (E.auto_complete) {
+    /*if (E.auto_complete) {
       editorAutoComplete();
-    }
+    }*/
   }
   return 0;
 }

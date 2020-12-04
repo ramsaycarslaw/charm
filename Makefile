@@ -1,2 +1,2 @@
-kilo: kilo.c
-	$(CC) kilo.c -o kilo -Wall -Wextra -pedantic -std=c99
+charm: charm.c
+	$(CC) charm.c -o charm -Wall -Wextra -pedantic -std=c99 -g
