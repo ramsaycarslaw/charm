@@ -93,6 +93,11 @@ struct editorConfig {
   int autopair;
   int auto_complete;
   int suggestion;
+  int mx;
+  int my;
+  int mroff;
+  int mcoff;
+  int prefix;          
   erow *row;
   int dirty;
   char *filename;
@@ -1314,7 +1319,7 @@ void editorProcessKeypress() {
       editorCenter();
       break;  
     case CTRL_KEY('x'):
-      editorSave();
+      E.prefix = (E.prefix == 1) ? 0 : 1;
       break;
   case '\t':
     if (E.suggestions != NULL && E.auto_complete) {
@@ -1332,13 +1337,45 @@ void editorProcessKeypress() {
       break;
 
     case CTRL_KEY('s'):
+      if (E.prefix) {
+        E.prefix = 0;
+        editorSave();    
+        break;
+      }
       editorFind();
       break;
-    case CTRL_KEY('o'):
+    case CTRL_KEY('f'):
       editorOpenNew();
       break;
     case CTRL_KEY('c'):
+      if (E.prefix) {
+        E.prefix = 0;
+        if (E.dirty && quit_times > 0) {
+        editorSetStatusMessage("Warning: File has unsaved changes. "
+          "Press Ctrl-Q %d more times to quit.", quit_times);
+        quit_times--;
+        return;
+      }
+      write(STDOUT_FILENO, "\x1b[2J", 4);
+      write(STDOUT_FILENO, "\x1b[H", 3);
+      exit(0);
+      
+      }
       editorChangeInner();
+      break;
+    case CTRL_KEY(' '):
+      E.mx = E.cx;
+      E.my = E.cy;
+      E.mroff = E.rowoff;
+      E.mcoff = E.coloff;
+	    editorSetStatusMessage("Mark set");
+	    break;
+    case CTRL_KEY('u'):
+      E.cx = E.mx;
+      E.cy = E.my;
+      E.rowoff = E.mroff;
+      E.coloff = E.mcoff;                
+      editorSetStatusMessage("Mark popped");
       break;
     case '{':
     case '"':
@@ -1405,6 +1442,11 @@ void initEditor() {
   E.statusmessage[0] = '\0';
   E.statusmsg_time = 0;
   E.syntax = NULL;
+  E.prefix = 0;
+  E.mx =0;
+  E.my = 0;
+  E.mroff = 0;
+  E.mcoff = 0;        
   
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
   E.screenrows -= 2;
