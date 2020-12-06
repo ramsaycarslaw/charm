@@ -152,6 +152,10 @@ char *PY_HL_keywords[] = {
     "iter|", "memoryview|", "object|", "property|", "staticmethod|", "unichr|", NULL
 };
 
+char *TEX_HL_extensions[] = {".tex", NULL};
+char *TEX_HL_keywords[] = { "\\usepackage", "\\documentclass", "\\author", "\\title", "\\centering", "\\maketitle", "\\begin", "\\end",  
+  "$$|", "\\newcommand", "equation|", "figure|", "theorem|", "tabular|", NULL};  
+    
 
 struct editorSyntax HLDB[] = {
   {
@@ -181,7 +185,14 @@ struct editorSyntax HLDB[] = {
     PY_HL_keywords,
     "#", "/*", "*/",
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS 
-  }	
+  },
+  {
+    "LaTeX", 
+    TEX_HL_extensions,
+    TEX_HL_keywords,
+    "%%", "", "",
+    HL_HIGHLIGHT_STRINGS      
+  }    	
 };
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
@@ -619,6 +630,10 @@ void editorRowDeleteChar(erow *row, int at) {
 /*** editor operations ***/
 
 void editorKillLine() {
+  if (E.cy == 0) 
+  {
+    return;  
+  }
   editorDelRow(E.cy);
   E.cy--;  
   return;    
@@ -1405,6 +1420,40 @@ void editorProcessKeypress() {
       if (E.cy < E.numrows)
         E.cx = E.row[E.cy].size;
       break;
+      
+    case CTRL_KEY('f'):
+      if (E.row[E.cy].chars[E.cx] == ' ') 
+      {
+        E.cx++;
+      } 
+      while (E.row[E.cy].chars[E.cx] != ' ')  
+      {
+        E.cx++;  
+      }
+      editorScroll();
+      break;
+      
+    case CTRL_KEY('b'):
+       if (E.row[E.cy].chars[E.cx] == ' ') 
+       {
+         E.cx--;
+       } 
+       while (E.row[E.cy].chars[E.cx] != ' ')  
+       {
+         E.cx--;  
+       }
+       editorScroll();
+       break;
+       
+    case CTRL_KEY('n'):
+      E.cy += 10;
+      editorScroll();
+      break;     
+      
+    case CTRL_KEY('p'):
+      E.cy -= 10;
+      editorScroll();
+      break;                                
 
     case CTRL_KEY('s'):
       if (E.prefix) {
@@ -1413,9 +1462,6 @@ void editorProcessKeypress() {
         break;
       }
       editorFind();
-      break;
-    case CTRL_KEY('f'):
-      editorOpenNew();
       break;
     case CTRL_KEY('c'):
       if (E.prefix) {
