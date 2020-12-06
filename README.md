@@ -28,6 +28,11 @@ Charm takes the best (my favorite) features from vi and Emacs to create a balanc
 * Python
 
 ## ToDo
+* Init file
+-- Status bar top
+-- all the colors
+-- maybe keybinds?        
+* Highlight text  
 * Incremental Search and replace
 * Better auto-indent
-* Auto-complete
+* Auto-complete  

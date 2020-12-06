@@ -101,6 +101,7 @@ struct editorConfig {
   int linenum_indent;            
   int raw_screenrows;
   int raw_screencols;
+  int indent;
   erow *row;
   int dirty;
   char *filename;
@@ -305,6 +306,7 @@ int getCursorPosition(int *rows, int *cols) {
 }
 
 
+/* Returns the size of the current termibal window */  
 int getWindowSize(int *rows, int *cols) {
   struct winsize ws;
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
@@ -830,38 +832,20 @@ int editorCountWhitespace(erow *row) {
 }
 
 void editorAutoIndent() {
-  if (E.cy == 0) return;
-  if (E.cy == E.numrows) return;
-  int indent;
-  int i;
-  erow *prev_row = &E.row[E.cy - 1];
-  erow *row = &E.row[E.cy];
-  indent = editorCountWhitespace(prev_row);
-  if (indent == 1) indent = 2;
-  char c = prev_row->chars[prev_row->rsize - 1];
-  if (c == '}') {
-    E.cx = indent - RCC_TAB_STOP;
-  } else if (c == '{' || c == ':') {
-    E.cx += indent + RCC_TAB_STOP;
-  } else {
-    E.cx += indent;
-  }
-  E.rx = E.cx;
-  for (i = 0; i <= indent + 1; i++) {
-    editorRowInsertChar(row, i, ' ');
+  int amount = E.indent * RCC_TAB_STOP;
+  for (int i = 0; i < amount; i++) 
+  {
+    editorInsertChar(' ');
   }
 }
 
-
-
 static void editorCenter(void) {
-    if (E.cy - E.screenrows / 2 != 0 && E.rowoff + E.cy - E.screenrows / 2 > 0 &&
-            E.rowoff + E.cy + E.screenrows / 2 < E.numrows) {
+    if (E.cy - E.screenrows / 2 != 0 && E.rowoff + E.cy - E.screenrows / 2 > 0 && E.rowoff + E.cy + E.screenrows / 2 < E.numrows) {
         for (int i = 0; i < E.screenrows / 2; i++) {
-			E.cy++;
+			    E.cy++;
         }
         for (int i = 0; i < E.screenrows / 2; i++) {
-			E.cy--;
+			    E.cy--;
         }
     }
 }
@@ -1021,7 +1005,6 @@ void editorSave() {
 }
 
 /*** find ***/
-
 
 void editorFindCallback(char *query, int key) {
   static int last_match = -1;
@@ -1375,6 +1358,7 @@ void editorMoveCursor(int key) {
 
 void editorProcessKeypress() {
   static int quit_times = RCC_QUIT_TIMES;
+  char *l = NULL;
   int c = editorReadKey();
   switch (c) {
     case '\r':
@@ -1406,11 +1390,6 @@ void editorProcessKeypress() {
     case CTRL_KEY('x'):
       E.prefix = (E.prefix == 1) ? 0 : 1;
       break;
-  case '\t':
-    if (E.suggestions != NULL && E.auto_complete) {
-      editorInsertSuggestions();
-    }
-    break;
     case CTRL_KEY('a'):
     case HOME_KEY:
       E.cx = 0;
@@ -1452,8 +1431,21 @@ void editorProcessKeypress() {
       
     case CTRL_KEY('p'):
       E.cy -= 10;
+      if (E.cy < 0) 
+      {
+        E.cy = 0;
+      }
       editorScroll();
-      break;                                
+      break;
+
+    case CTRL_KEY('j'):
+      l = editorPrompt("Jump to line: %s", NULL);
+      int line = atoi(l);
+      int change = line - E.cy-1;
+      E.cy += change;
+      if (E.cy < 0)
+        E.cy = 0;
+      break;
 
     case CTRL_KEY('s'):
       if (E.prefix) {
@@ -1494,13 +1486,26 @@ void editorProcessKeypress() {
       editorSetStatusMessage("Mark popped");
       break;
     case '{':
-    case '"':
-    case '(':
-    case '\'':
-    case '[':
-    case '<':
-      editorAutoPair(c);
+      E.indent++;
+      editorInsertChar('{');
       break;
+    
+    case '}':
+      E.indent--;
+      editorInsertChar('}');
+      break;
+
+    case ':':
+      E.indent--;
+      editorInsertChar(':');
+      break;
+
+    // soft tabs
+    case '\t':
+      for (int i = 0; i < RCC_TAB_STOP; i++)
+        editorInsertChar(' ');
+      break;
+
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
@@ -1558,6 +1563,7 @@ void initEditor() {
   E.statusmessage[0] = '\0';
   E.statusmsg_time = 0;
   E.linenum_indent = 6;
+  E.indent = 0;
   E.syntax = NULL;
   E.prefix = 0;
   E.mx =0;
