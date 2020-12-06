@@ -1,5 +1,5 @@
 // Copyright 2020 Ramsay Carslaw
-
+    
 /*** includes ***/
 
 #define _DEFAULT_SOURCE
@@ -41,7 +41,7 @@ enum editorKey {
   END_KEY,
   PAGE_UP,
   PAGE_DOWN
-};
+};    
 
 enum editorHighlight {
   HL_NORMAL = 0,
@@ -128,30 +128,42 @@ char *GO_HL_keywords[] = {
   "int64|","import|", NULL
 };
 
-char *MT_HL_extensions[] = {".MT", ".mt", NULL};
+char *MT_HL_extensions[] = {".MT", ".mt", ".mtl", NULL};
 char *MT_HL_keywords[] = {
   "if", "else", "fn", "print", "return", "len|", "printf|", "println|", "read|",
   "write|", "clock|", "string|", "number|", "color|", "for", "while", "exit|", "clear|", "show|", "Cd|", "Ls|", "input|", "append|", "delete|", "var", NULL
 };
 
-                         char *
-                         PY_HL_extensions[] = {".py", NULL};
-char *PY_HL_keywords[] = {"import", "def", "print", "if", "elif", "else", "int|", "str|", "float|", NULL};
+char *PY_HL_extensions[] = { ".py", NULL };
+char *PY_HL_keywords[] = {
+    // Python keywords and built-in functions
+    "and", "as", "assert", "break", "class", "continue", "def", "del", "elif", "else", "except", "exec", "finally", "for", "from", "global",
+    "if", "import", "in", "is", "lambda", "not", "or", "pass", "print", "raise", "return", "try", "while", "with", "yield", "async", "await",
+    "nonlocal", "range", "xrange", "reduce", "map", "filter", "all", "any", "sum", "dir", "abs", "breakpoint", "compile", "delattr", "divmod",
+    "format", "eval", "getattr", "hasattr", "hash", "help", "id", "input", "isinstance", "issubclass", "len", "locals", "max", "min", "next",
+    "open", "pow", "repr", "reversed", "round", "setattr", "slice", "sorted", "super", "vars", "zip", "__import__", "reload", "raw_input",
+    "execfile", "file", "cmp", "basestring",
+    // Python types
+    "buffer|", "bytearray|", "bytes|", "complex|", "float|", "frozenset|", "int|", "list|", "long|", "None|", "set|", "str|", "chr|", "tuple|",
+    "bool|", "False|", "True|", "type|", "unicode|", "dict|", "ascii|", "bin|", "callable|", "classmethod|", "enumerate|", "hex|", "oct|", "ord|",
+    "iter|", "memoryview|", "object|", "property|", "staticmethod|", "unichr|", NULL
+};
+
 
 struct editorSyntax HLDB[] = {
   {
-    ".c",
+    "C",
     C_HL_extensions,
     C_HL_keywords,
     "//", "/*", "*/",
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS 
   },
   {
-    ".go",
+    "Go",
     GO_HL_extensions,
     GO_HL_keywords,
     "//", "/*", "*/",
-    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS 
   },
   {
     "MT",
@@ -161,11 +173,11 @@ struct editorSyntax HLDB[] = {
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
   },
   {
-    ".py",
+    "Python",
     PY_HL_extensions,
     PY_HL_keywords,
     "#", "/*", "*/",
-    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS 
   }	
 };
 
@@ -606,6 +618,12 @@ void editorRowDeleteChar(erow *row, int at) {
 
 /*** editor operations ***/
 
+void editorKillLine() {
+  editorDelRow(E.cy);
+  E.cy--;  
+  return;    
+}
+    
 void editorAutoPair(char c) {
   if (E.autopair == 1) {
     erow *row = &E.row[E.cy];
@@ -807,7 +825,7 @@ void editorAutoIndent() {
   if (indent == 1) indent = 2;
   char c = prev_row->chars[prev_row->rsize - 1];
   if (c == '}') {
-    return;
+    E.cx = indent - RCC_TAB_STOP;
   } else if (c == '{' || c == ':') {
     E.cx += indent + RCC_TAB_STOP;
   } else {
@@ -819,10 +837,19 @@ void editorAutoIndent() {
   }
 }
 
-void editorCenter() {
-  E.cy = E.rowoff + E.screenrows/2 - 1;
-  if (E.cy > E.numrows) E.cy = E.numrows;
-} 
+
+
+static void editorCenter(void) {
+    if (E.cy - E.screenrows / 2 != 0 && E.rowoff + E.cy - E.screenrows / 2 > 0 &&
+            E.rowoff + E.cy + E.screenrows / 2 < E.numrows) {
+        for (int i = 0; i < E.screenrows / 2; i++) {
+			E.cy++;
+        }
+        for (int i = 0; i < E.screenrows / 2; i++) {
+			E.cy--;
+        }
+    }
+}
 
 void editorInsertChar(int c) {
   if (E.cy == E.numrows) {
@@ -1120,7 +1147,7 @@ void editorDrawRows(struct abuf *ab) {
       unsigned char *hl = &E.row[filerow].hl[E.coloff];
       int current_color = -1;
       int j;
-      for (j = 0; j < len; j++) {
+      for (j = 0; j < len; j++) { 
         if (iscntrl(c[j])) {
           char sym = (c[j] <= 26) ? '@' + c[j] : '?';
           abAppend(ab, "\x1b[7m", 4);
@@ -1317,6 +1344,14 @@ void editorProcessKeypress() {
       break;
     case CTRL_KEY('l'):
       editorCenter();
+      break;
+    case CTRL_KEY('k'):
+      editorKillLine();
+      break;
+    case CTRL_KEY('o'):
+      if (E.cy < E.numrows)
+       E.cx = E.row[E.cy].size;
+      editorInsertNewline();
       break;  
     case CTRL_KEY('x'):
       E.prefix = (E.prefix == 1) ? 0 : 1;
