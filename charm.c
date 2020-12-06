@@ -97,7 +97,10 @@ struct editorConfig {
   int my;
   int mroff;
   int mcoff;
-  int prefix;          
+  int prefix;
+  int linenum_indent;            
+  int raw_screenrows;
+  int raw_screencols;
   erow *row;
   int dirty;
   char *filename;
@@ -227,7 +230,6 @@ void enableRawMode() {
   raw.c_cc[VTIME] = 1;
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
-
 
 
 int editorReadKey() {
@@ -460,14 +462,14 @@ void editorUpdateSyntax(erow *row) {
 int editorSyntaxToColor(int hl) {
   switch (hl) {
   case HL_MLCOMMENT:
-  case HL_COMMENT: return 36;
+  case HL_COMMENT: return 248;
   case HL_FUNC: return 34;
-  case HL_KEYWORD1: return 33;
-  case HL_KEYWORD2: return 32;
-  case HL_STRING: return 35;
-  case HL_NUMBER: return 31;
-  case HL_MATCH: return 93;
-  default: return 37;
+  case HL_KEYWORD1: return 167;
+  case HL_KEYWORD2: return 108;
+  case HL_STRING: return 136;
+  case HL_NUMBER: return 24;
+  case HL_MATCH: return 81;
+  default: return 7;
   }
 }
 
@@ -551,8 +553,6 @@ void editorUpdateRow(erow *row) {
 
   editorUpdateSyntax(row);
 }
-
-
 
 
 void editorInsertRow(int at, char *s, size_t len) {
@@ -1118,11 +1118,26 @@ void editorScroll() {
   }
 }
 
-
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
+
     int filerow = y + E.rowoff;
+
+    //draw line number
+   char format[16];
+   char linenum[E.linenum_indent + 1];
+   memset(linenum, ' ', E.linenum_indent);
+   snprintf(format, 4, "%%%dd", E.linenum_indent - 1);
+   if (filerow < E.numrows) {
+      snprintf(linenum, E.linenum_indent + 1, format, filerow + 1);
+    }
+    abAppend(ab, "\x1b[38;5;244m", 11);
+    abAppend(ab, "\x1b[48;5;234m", 11);    
+    abAppend(ab, linenum, E.linenum_indent);
+    abAppend(ab, "\x1b[49m", 5);
+    abAppend(ab, "\x1b[39m", 5);  
+    abAppend(ab, " ", 1);  
     if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
@@ -1147,8 +1162,8 @@ void editorDrawRows(struct abuf *ab) {
       unsigned char *hl = &E.row[filerow].hl[E.coloff];
       int current_color = -1;
       int j;
-      for (j = 0; j < len; j++) { 
-        if (iscntrl(c[j])) {
+      for (j = 0; j < len; j++) {
+          if (iscntrl(c[j])) {
           char sym = (c[j] <= 26) ? '@' + c[j] : '?';
           abAppend(ab, "\x1b[7m", 4);
           abAppend(ab, &sym, 1);
@@ -1169,7 +1184,7 @@ void editorDrawRows(struct abuf *ab) {
           if (color != current_color) {
             current_color = color;
             char buf[16];
-            int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+            int clen = snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", color);
             abAppend(ab, buf, clen);
           }
           abAppend(ab, &c[j], 1);
@@ -1183,17 +1198,17 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorDrawStatusBar(struct abuf *ab) {
-  abAppend(ab, "\x1b[7m", 4);
+  abAppend(ab, "\x1b[38;5;109;7m", 14);
   char status[80], rstatus[80];
   int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
     E.filename ? E.filename : "[No Name]", E.numrows,
     E.dirty ? "(modified)" : "");
   int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d",
 		      E.syntax ? E.syntax->filetype : "text", E.cy + 1, E.numrows);
-  if (len > E.screencols) len = E.screencols;
+  if (len > E.raw_screencols) len = E.raw_screencols;
   abAppend(ab, status, len);
-  while (len < E.screencols) {
-    if (E.screencols - len == rlen) {
+  while (len < E.raw_screencols) {
+    if (E.raw_screencols - len == rlen) {
       abAppend(ab, rstatus, rlen);
       break;
     } else {
@@ -1208,10 +1223,29 @@ void editorDrawStatusBar(struct abuf *ab) {
 void editorDrawMessageBar(struct abuf *ab) {
   abAppend(ab, "\x1b[K", 3);
   int msglen = strlen(E.statusmessage);
-  if (msglen > E.screencols) msglen = E.screencols;
+  if (msglen > E.raw_screencols) msglen = E.raw_screencols;
   if (msglen && time(NULL) - E.statusmsg_time < 5)
     abAppend(ab, E.statusmessage, msglen);
 }
+
+void editorUpdateLinenumIndent() {
+    int digit;
+    int numrows = E.numrows;
+
+    if (numrows == 0) {
+        digit = 0;
+        E.linenum_indent = 2;
+        return;
+    }
+
+    digit = 1;
+    while (numrows >= 10) {
+        numrows = numrows / 10;
+        digit++;
+    }
+    E.linenum_indent = digit + 2;
+}
+
 
 void editorClearScreen() {
   E.row = NULL;
@@ -1222,19 +1256,20 @@ void editorClearScreen() {
 
 
 void editorRefreshScreen() {
+  editorUpdateLinenumIndent();
+  E.screencols = E.raw_screencols - E.linenum_indent;
   editorScroll();
   struct abuf ab = ABUF_INIT;
   abAppend(&ab, "\x1b[?25l", 6);
   abAppend(&ab, "\x1b[H", 3);
-  
   editorDrawRows(&ab);
   editorDrawStatusBar(&ab);
   editorDrawMessageBar(&ab);
   
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
-                                            (E.rx - E.coloff) + 1);
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
+  //snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,// (E.rx - E.coloff) + 1 + E.linenum_indent);
+  //snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.rx - E.coloff + 1 + E.linenum_indent);
   abAppend(&ab, buf, strlen(buf));
   abAppend(&ab, "\x1b[?25h", 6);
   write(STDOUT_FILENO, ab.b, ab.len);
@@ -1476,6 +1511,7 @@ void initEditor() {
   E.suggestions = NULL;
   E.statusmessage[0] = '\0';
   E.statusmsg_time = 0;
+  E.linenum_indent = 6;
   E.syntax = NULL;
   E.prefix = 0;
   E.mx =0;
@@ -1483,8 +1519,9 @@ void initEditor() {
   E.mroff = 0;
   E.mcoff = 0;        
   
-  if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
-  E.screenrows -= 2;
+  if (getWindowSize(&E.raw_screenrows, &E.raw_screencols) == -1) die("getWindowSize");
+  E.screenrows = E.raw_screenrows - 2;
+  E.screencols = E.raw_screencols;
 }
 
 
@@ -1496,7 +1533,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
- editorSetStatusMessage("HELP: Ctrl-Q = quit | Ctrl-S = save | Ctrl-F = find");
+ editorSetStatusMessage("C-x C-c = quit | C-x C-s = save | C-f = find | C-o = newline");
   
   while (1) {
     editorRefreshScreen();
