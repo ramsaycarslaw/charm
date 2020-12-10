@@ -1,3 +1,5 @@
+use "main.mtl";
+
 fn main() 
   {  
   var colors = ["r", "g", "b", "y", "c","m"];

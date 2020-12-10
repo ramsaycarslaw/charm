@@ -135,7 +135,7 @@ char *GO_HL_keywords[] = {
 char *MT_HL_extensions[] = {".MT", ".mt", ".mtl", NULL};
 char *MT_HL_keywords[] = {
   "if", "else", "fn", "print", "return", "class", "this", "init|", "len|", "printf|", "println|", "read|",
-  "write|", "clock|", "string|", "number|", "color|", "for", "while", "exit|", "clear|", "show|", "Cd|", "Ls|", "input|", "append|", "delete|", "var", NULL
+  "write|", "clock|", "use",  "string|", "number|", "color|", "for", "while", "exit|", "clear|", "show|", "Cd|", "Ls|", "input|", "append|", "delete|", "var", NULL
 };
 
 char *PY_HL_extensions[] = { ".py", NULL };
