@@ -102,6 +102,8 @@ struct editorConfig {
   int raw_screenrows;
   int raw_screencols;
   int indent;
+  int normal;
+  int normal_mod;
   erow *row;
   int dirty;
   char *filename;
@@ -134,7 +136,8 @@ char *GO_HL_keywords[] = {
 
 char *MT_HL_extensions[] = {".MT", ".mt", ".mtl", NULL};
 char *MT_HL_keywords[] = {
-  "if", "else", "fn", "print", "return", "class", "this", "init|", "len|", "printf|", "println|", "read|",
+  "if", "else", "fn", "print", "return", "class", "this", "break", "continue", "switch", "case", "default", "super",  
+  "init|", "len|", "printf|", "println|", "read|",
   "write|", "clock|", "use",  "string|", "number|", "color|", "for", "while", "exit|", "clear|", "show|", "Cd|", "Ls|", "input|", "append|", "delete|", "var", NULL
 };
 
@@ -486,6 +489,7 @@ int editorSyntaxToColor(int hl) {
   }
 }
 
+/* Detect file type from extension */
 void editorSelectSyntaxHighlight() {
   E.syntax = NULL;
   if (E.filename == NULL) return;
@@ -648,7 +652,7 @@ void editorAutoPair(char c) {
       editorRowInsertChar(row, E.cx, '{');
       E.cx += 3;
       editorRowInsertChar(row, E.cx, '}');
-     return;
+      return;
     } else if (c == '(') {
       editorRowInsertChar(row, E.cx, '(');
       E.cx += 3;
@@ -677,7 +681,7 @@ void editorAutoPair(char c) {
     }
   } else {
     editorInsertChar(c);
-   }
+  }
 }
 
 char *wordFromCursor(erow *row) {
@@ -889,6 +893,7 @@ void editorDeleteChar() {
   }
 }
 
+/* Like vims c keyword */
 void editorChangeInner() {  
    erow *row = &E.row[E.cy];
 
@@ -944,6 +949,7 @@ char *editorRowsToString(int *buflen) {
   return buf;
 }
 
+/* Open a file */
 void editorOpen(char *filename) {
   free(E.filename);
   E.filename = strdup(filename);
@@ -1061,8 +1067,7 @@ void editorFind() {
   int saved_cy = E.cy;
   int saved_coloff = E.coloff;
   int saved_rowoff = E.rowoff;
-  char *query = editorPrompt("Pattern: %s (Use ESC|Arrows|Enter)",
-                             editorFindCallback);
+  char *query = editorPrompt("/%s",editorFindCallback);
   if (query) {
     free(query);
   } else {
@@ -1116,6 +1121,7 @@ void editorScroll() {
   }
 }
 
+/* Draw stuff to the screen */
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
@@ -1144,13 +1150,13 @@ void editorDrawRows(struct abuf *ab) {
         if (welcomelen > E.screencols) welcomelen = E.screencols;
         int padding = (E.screencols - welcomelen) / 2;
         if (padding) {
-          abAppend(ab, "~", 1);
+          abAppend(ab, " ", 1);
           padding--;
         }
         while (padding--) abAppend(ab, " ", 1);
         abAppend(ab, welcome, welcomelen);
       } else {
-        abAppend(ab, "~", 1);
+        abAppend(ab, " ", 1);
       }
     } else {
       int len = E.row[filerow].rsize - E.coloff;
@@ -1360,10 +1366,199 @@ void editorProcessKeypress() {
   static int quit_times = RCC_QUIT_TIMES;
   char *l = NULL;
   int c = editorReadKey();
+  if (E.normal) 
+  {
+    // NORMAL
+    switch (c) 
+    {
+      /* Comamnd Mode */
+      case ':':
+        editorSetStatusMessage("  COMMAND");
+        char *response = editorPrompt(":", NULL);
+        if (strcmp(response, "w") == 0) {
+          editorSave();
+        } 
+        else if (strcmp(response, "wq") == 0 || strcmp(response, "x")) 
+        {
+          editorSave();
+          write(STDOUT_FILENO, "\x1b[2J", 4);
+          write(STDOUT_FILENO, "\x1b[H", 3);
+          exit(74);
+        } 
+        else if (strcmp(response, "q") == 0) { 
+          write(STDOUT_FILENO, "\x1b[2J", 4);
+          write(STDOUT_FILENO, "\x1b[H", 3);
+          exit(74);
+        } 
+        else 
+        {
+          editorSetStatusMessage("Unkown command");
+        }
+        break;
+
+
+      /* Modifiers */
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        E.normal_mod *= 10;
+        char buf[2];
+        buf[0] = c;
+        buf[1] = '\0';
+        E.normal_mod += atoi(buf);
+        break;
+      
+
+      /* Insert mode */
+      case 'i':
+        editorSetStatusMessage("--INSERT--");
+        E.normal = 0;
+        break;
+
+      case 'I':
+        E.cx = 0;
+        E.normal = 0;
+        editorSetStatusMessage("--INSERT--");
+        break;
+
+
+      case 'a':
+        editorSetStatusMessage("--INSERT--");
+        E.cx++;
+        E.normal = 0;
+        break;
+
+      case 'A':
+        if (E.cy < E.numrows)
+          E.cx = E.row[E.cy].size;
+        E.normal = 1;
+        editorSetStatusMessage("--INSERT--");
+        break;
+
+      case 'c':
+        editorChangeInner();
+        editorSetStatusMessage("--INSERT--");
+        E.normal = 0;
+        break;
+
+      case 'o':
+        editorSetStatusMessage("--INSERT--");
+        if (E.cy < E.numrows)
+          E.cx = E.row[E.cy].size;
+        E.normal = 0;
+        editorInsertNewline();
+        break;
+
+      case 'O':
+        editorSetStatusMessage("--INSERT--");
+        E.cy--;
+        if (E.cy < E.numrows)
+          E.cx = E.row[E.cy].size;
+        E.normal = 0;
+        editorInsertNewline();
+        break;
+
+        /* Words etc */
+      case 'w':
+        if (E.row[E.cy].chars[E.cx] == ' ') 
+        {
+          E.cx++;
+        } 
+        while (E.row[E.cy].chars[E.cx] != ' ')  
+        {
+          E.cx++;  
+        }
+        editorScroll();
+        break;
+
+      case 'b':
+        if (E.row[E.cy].chars[E.cx] == ' ') 
+        {
+          E.cx--;
+        } 
+        while (E.row[E.cy].chars[E.cx] != ' ')  
+        {
+          E.cx--;  
+        }
+        editorScroll();
+        break;
+
+      /* cursor movement */
+      case 'j':
+        /* Handle '10j' etc */
+        if (E.normal_mod != 0) {
+          if (E.cy + E.normal_mod > E.numrows) {
+            E.cy = E.numrows;
+            E.normal_mod = 0;
+            break;
+          }
+          E.cy += E.normal_mod;
+          E.normal_mod = 0;
+          break;
+        }
+        editorMoveCursor(ARROW_DOWN);
+        break;
+      case 'k':
+        if (E.normal_mod != 0) {
+          if (E.cy - E.normal_mod < 0) {
+            E.cy = 0;
+            E.normal_mod = 0;
+            break;
+          }
+          E.cy -= E.normal_mod;
+          E.normal_mod = 0;
+          break;
+        }
+        editorMoveCursor(ARROW_UP);
+        break;
+      case 'h':
+        editorMoveCursor(ARROW_LEFT);
+        break;
+      case 'l':
+        editorMoveCursor(ARROW_RIGHT);
+        break;
+      case '0':
+        /* Allow '10j' etc */
+        if (E.normal_mod > 0) {
+          E.normal_mod *= 10;
+          break;
+        }
+        E.cx = 0;
+        break;
+
+      case '$':
+        if (E.cy < E.numrows)
+          E.cx = E.row[E.cy].size;
+        break;
+
+      /* Finding stuff */
+      case '/':
+        editorFind();
+        break;
+
+      /* No match */
+      default:
+        break;
+    }
+  } 
+  else
+  {
+    // INSERT 
   switch (c) {
     case '\r':
       editorInsertNewline();
       editorAutoIndent();
+      break;
+    case 27:
+      E.normal = 1;
+      editorSetStatusMessage("  NORMAL");
+      E.cx--;
       break;
     case CTRL_KEY('q'):
       if (E.dirty && quit_times > 0) {
@@ -1389,15 +1584,6 @@ void editorProcessKeypress() {
       break;  
     case CTRL_KEY('x'):
       E.prefix = (E.prefix == 1) ? 0 : 1;
-      break;
-    case CTRL_KEY('a'):
-    case HOME_KEY:
-      E.cx = 0;
-      break;
-    case CTRL_KEY('e'):
-    case END_KEY:
-      if (E.cy < E.numrows)
-        E.cx = E.row[E.cy].size;
       break;
       
     case CTRL_KEY('f'):
@@ -1455,22 +1641,6 @@ void editorProcessKeypress() {
       }
       editorFind();
       break;
-    case CTRL_KEY('c'):
-      if (E.prefix) {
-        E.prefix = 0;
-        if (E.dirty && quit_times > 0) {
-        editorSetStatusMessage("Warning: File has unsaved changes. "
-          "Press Ctrl-Q %d more times to quit.", quit_times);
-        quit_times--;
-        return;
-      }
-      write(STDOUT_FILENO, "\x1b[2J", 4);
-      write(STDOUT_FILENO, "\x1b[H", 3);
-      exit(0);
-      
-      }
-      editorChangeInner();
-      break;
     case CTRL_KEY(' '):
       E.mx = E.cx;
       E.my = E.cy;
@@ -1507,9 +1677,7 @@ void editorProcessKeypress() {
       break;
 
     case BACKSPACE:
-    case CTRL_KEY('h'):
     case DEL_KEY:
-    case CTRL_KEY('d'):
       if (c == DEL_KEY || c == CTRL_KEY('d')) editorMoveCursor(ARROW_RIGHT);
       editorDeleteChar();
       break;
@@ -1535,13 +1703,13 @@ void editorProcessKeypress() {
       editorMoveCursor(c);
       break;
     case CTRL_KEY('g'):
-    case '\x1b':
       break;
     default:
       editorInsertChar(c);
       break;
   }
   quit_times = RCC_QUIT_TIMES;
+}
 }
 
 /*** init ***/
@@ -1564,6 +1732,8 @@ void initEditor() {
   E.statusmsg_time = 0;
   E.linenum_indent = 6;
   E.indent = 0;
+  E.normal = 1;
+  E.normal_mod = 0;
   E.syntax = NULL;
   E.prefix = 0;
   E.mx =0;

@@ -6,3 +6,13 @@ case 2:
 
 we need a global indent tracker
 
+	- After a line ending in '{'.
+	- After a line starting with a keyword from 'cinwords'.
+	- Before a line starting with '}' (only with the "O" command).
+	When typing '}' as the first character in a new line, that line is
+	given the same indent as the matching '{'.
+	When typing '#' as the first character in a new line, the indent for
+	that line is removed, the '#' is put in the first column.  The indent
+	is restored for the next line.  If you don't want this, use this
+
+

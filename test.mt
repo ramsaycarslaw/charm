@@ -13,4 +13,11 @@ fn main()
   }         
 }
 
+var bool = true;
+
+var x = bool ? "True" : "False";
+
+// print it out
+print x;
+
 main();  
