@@ -20,6 +20,8 @@ int editorSyntaxToColor(int hl) {
     return colors.numberColor;
   case HL_MATCH:
     return colors.matchColor;
+  case HL_OTHER:
+    return colors.otherColor;
   default:
     return colors.normalColor;
   }
@@ -81,11 +83,12 @@ int parseInitFile() {
   colors.numberColor = AS_NUMBER(interpret("print numberColor;"));
   colors.backgroundColor = AS_NUMBER(interpret("print backgroundColor;"));
   colors.matchColor = AS_NUMBER(interpret("print matchColor;"));
+  colors.otherColor = AS_NUMBER(interpret("print otherColor;"));
 
   /* Window colors */
   colors.statusColor = AS_NUMBER(interpret("print statusColor;"));
-  colors.linenumColor = AS_NUMBER(
-      interpret("print ((linenumColor == nil) ? 244 : linenumColor);"));
+  colors.backgroundColor = AS_NUMBER(interpret("print backgroundColor;"));
+  colors.linenumColor = AS_NUMBER(interpret("print ((linenumColor == nil) ? 244 : linenumColor);"));
   colors.linenumBGColor = AS_NUMBER(interpret("print linenumBGColor;"));
 
   freeVM();

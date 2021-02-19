@@ -32,6 +32,7 @@
 #define HL_HIGHLIGHT_NUMBERS (1 << 0)
 #define HL_HIGHLIGHT_STRINGS (1 << 1)
 #define HL_HIGHLIGHT_FUNC (1 << 10)
+#define HL_HIGHLIGHT_MACROS (1 << 11)
 
 /*** data ***/
 
@@ -60,6 +61,18 @@ char *MT_HL_keywords[] = {
     "write|", "clock|", "use",      "string|", "number|",  "color|",
     "for",    "while",  "exit|",    "clear|",  "show|",    "Cd|",
     "Ls|",    "input|", "append|",  "delete|", "var",      NULL};
+
+char *RUST_HL_extensions[] = {".rs", ".RS", NULL};
+char* RUST_HL_keywords[] = {
+  // all rust reserved keywords
+  "as", "break", "const", "continue", "crate", 
+  "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", 
+  "let", "loop", "match", "mod", "move", "mut", "pub", "ref", 
+  "return", "self", "Self", "static", "struct", "super", 
+  "trait", "true", "type", "unsafe", "use", "where", "while", "async", 
+  "await", "dyn", "abstract|", "become|", "box|", "do|", "final|", 
+  "macro|", "override|", "priv|", "typeof|", "unsized|", "virtual|", 
+  "yield|", "try|", NULL};
 
 char *PY_HL_extensions[] = {".py", NULL};
 char *PY_HL_keywords[] = {
@@ -90,13 +103,15 @@ char *TEX_HL_keywords[] = {
 
 struct editorSyntax HLDB[] = {
     {"C", C_HL_extensions, C_HL_keywords, "//", "/*", "*/",
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
     {"Go", GO_HL_extensions, GO_HL_keywords, "//", "/*", "*/",
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
     {"MT", MT_HL_extensions, MT_HL_keywords, "//", "/*", "*/",
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
+    {"Rust", RUST_HL_extensions, RUST_HL_keywords, "//", "/*", "*/",
+      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC | HL_HIGHLIGHT_MACROS },
     {"Python", PY_HL_extensions, PY_HL_keywords, "#", "/*", "*/",
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
     {"LaTeX", TEX_HL_extensions, TEX_HL_keywords, "%%", "", "",
      HL_HIGHLIGHT_STRINGS}};
 
@@ -139,11 +154,8 @@ void editorUpdateSyntax(erow *row) {
   int prev_sep = 1;
   int in_string = 0;
 
-  int in_func;
-
   int in_comment = (row->idx > 0 && E.row[row->idx - 1].hl_open_comment);
   int i = 0;
-  // int target = 0;
   while (i < row->rsize) {
     char c = row->render[i];
     unsigned char prev_hl = (i > 0) ? row->hl[i - 1] : HL_NORMAL;
@@ -156,22 +168,15 @@ void editorUpdateSyntax(erow *row) {
 
     // functions
     if (E.syntax->flags & HL_HIGHLIGHT_FUNC) {
-      if (in_func) {
-        row->hl[i] = HL_FUNC;
-        if (c == in_func)
-          in_func = 0;
-        i++;
-        continue;
-      } else {
-        if (c == '(') {
-          int count = i - 1;
-          while (!is_separator(row->render[count])) {
-            row->hl[count] = HL_FUNC;
-            in_func = 0;
-            count--;
-            continue;
+      if (c == '(' && row->render[i-1] != '!') {
+        int j = i-1;
+        while ((row->render[j] != ' ' || row->render[j] != '.') && j > 0) {
+          if (row->render[j] == ' ' || row->render[j] == '.') {
+            break;
           }
-        }
+          row->hl[j] = HL_FUNC;
+          j--;
+        } 
       }
     }
 
@@ -226,6 +231,18 @@ void editorUpdateSyntax(erow *row) {
         continue;
       }
     }
+
+    if (E.syntax->flags & HL_HIGHLIGHT_MACROS) {
+      if (c == '!') {
+        row->hl[i] = HL_OTHER;
+        int k = i;
+        while (row->render[k] != ' ') {
+          row->hl[k] = HL_OTHER;
+          k--;
+        } 
+      }
+    }
+
     if (prev_sep) {
       int j;
       for (j = 0; keywords[j]; j++) {
@@ -235,6 +252,7 @@ void editorUpdateSyntax(erow *row) {
           klen--;
         if (!strncmp(&row->render[i], keywords[j], klen) &&
             is_separator(row->render[i + klen])) {
+
           memset(&row->hl[i], kw2 ? HL_KEYWORD2 : HL_KEYWORD1, klen);
           i += klen;
           break;
@@ -387,48 +405,10 @@ void editorKillLine() {
   if (E.cy == 0) {
     return;
   }
+  strcpy(E.paste, E.row[E.cy].chars);
   editorDelRow(E.cy);
   E.cy--;
   return;
-}
-
-void editorAutoPair(char c) {
-  if (E.autopair == 1) {
-    erow *row = &E.row[E.cy];
-    if (c == '{') {
-      editorRowInsertChar(row, E.cx, '{');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, '}');
-      return;
-    } else if (c == '(') {
-      editorRowInsertChar(row, E.cx, '(');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, ')');
-      return;
-    } else if (c == '"') {
-      editorRowInsertChar(row, E.cx, '"');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, '"');
-      return;
-    } else if (c == '\'') {
-      editorRowInsertChar(row, E.cx, '\'');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, '\'');
-      return;
-    } else if (c == '[') {
-      editorRowInsertChar(row, E.cx, '[');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, ']');
-      return;
-    } else if (c == '<') {
-      editorRowInsertChar(row, E.cx, '<');
-      E.cx += 3;
-      editorRowInsertChar(row, E.cx, '>');
-      return;
-    }
-  } else {
-    editorInsertChar(c);
-  }
 }
 
 int editorCountWhitespace(erow *row) {
@@ -772,7 +752,7 @@ void editorProcessKeypress() {
     /* Comamnd Mode */
     case ':':
       editorSetStatusMessage("  COMMAND");
-      char *response = editorPrompt(":", NULL);
+      char *response = editorPrompt(":%s", NULL);
       if (strcmp(response, "w") == 0) {
         editorSave();
       } else if (strcmp(response, "wq") == 0 || strcmp(response, "x")) {
@@ -878,11 +858,14 @@ void editorProcessKeypress() {
         if (E.row[E.cy].chars[E.cx] == ' ') {
           E.cx++;
         }
-        while (E.row[E.cy].chars[E.cx] != ' ') {
+        while (E.row[E.cy].chars[E.cx] != ' ' && E.cy <= E.numrows) {
           if (E.cx == strlen(E.row[E.cy].chars)) {
             E.cx = strlen(E.row[E.cy].chars) - 1;
             break;
           }
+
+          if (E.cy >= E.numrows)
+            break;
 
           if (E.cx + 1 > strlen(E.row[E.cy].chars) - 1) {
             if (E.cy < E.numrows)
@@ -907,7 +890,29 @@ void editorProcessKeypress() {
       editorScroll();
       break;
 
+    /* delete modes */
+    case 'd':
+      if (E.deletemode) {
+        E.deletemode = 0;
+        editorKillLine();
+        break;
+      }
+      E.deletemode = 1;
+      break;
+
+    case 'p':
+      editorInsertRow(E.cy, E.paste, strlen(E.paste)); 
+      break;
+
+    /* Visual modes */
+    case 'V': {
+      editorSetStatusMessage("VISUAL LINE");
+      break;
+    }
+
     /* cursor movement */
+    case '\r':
+    case ARROW_DOWN:
     case 'j':
       /* Handle '10j' etc */
       if (E.normal_mod != 0) {
@@ -922,6 +927,7 @@ void editorProcessKeypress() {
       }
       editorMoveCursor(ARROW_DOWN);
       break;
+    case ARROW_UP:
     case 'k':
       if (E.normal_mod != 0) {
         if (E.cy - E.normal_mod < 0) {
@@ -935,9 +941,13 @@ void editorProcessKeypress() {
       }
       editorMoveCursor(ARROW_UP);
       break;
+
+    case BACKSPACE:
+    case ARROW_LEFT:
     case 'h':
       editorMoveCursor(ARROW_LEFT);
       break;
+    case ARROW_RIGHT:
     case 'l':
       editorMoveCursor(ARROW_RIGHT);
       break;
@@ -1141,11 +1151,18 @@ void initEditor() {
   E.filename = NULL;
   E.suggestions = NULL;
   E.statusmessage[0] = '\0';
+  E.paste[0] = '\0';
   E.statusmsg_time = 0;
   E.linenum_indent = 6;
   E.indent = 0;
+
+  /* Editor modes */
   E.normal = 1;
   E.normal_mod = 0;
+
+  /* delete modes */
+  E.deletemode = 0;
+
   E.syntax = NULL;
   E.prefix = 0;
   E.mx = 0;

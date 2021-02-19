@@ -45,12 +45,15 @@ void editorDrawRows(struct abuf *ab) {
   /* Change the backgeound color
   char normal_bg[10];
   sprintf(normal_bg, "\x1b[48;5;%dm", 7);
-  abAppend(ab, normal_bg, 10);*/
+  abAppend(ab, normal_bg, 10);
+  */
 
   for (y = 0; y < E.screenrows; y++) {
 
     int filerow = y + E.rowoff;
 
+    char normal_bg[13];
+    sprintf(normal_bg, "\x1b[48;5;%dm", colors.backgroundColor);
     // draw line number
     char format[16];
     char linenum[E.linenum_indent + 1];
@@ -77,6 +80,7 @@ void editorDrawRows(struct abuf *ab) {
 
     if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
+        abAppend(ab, normal_bg, 10);
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome),
                                   "Charm -- version %s", RCC_VERSION);
@@ -110,9 +114,11 @@ void editorDrawRows(struct abuf *ab) {
           abAppend(ab, &sym, 1);
           abAppend(ab, "\x1b[m", 3);
 
+
           if (current_color != -1) {
             char buf[16];
             int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_color);
+            abAppend(ab, normal_bg, 10);
             abAppend(ab, buf, clen);
           }
         } else if (hl[j] == HL_NORMAL) {
@@ -121,6 +127,7 @@ void editorDrawRows(struct abuf *ab) {
             char normal_text[12];
 
             sprintf(normal_text, "\x1b[38;5;%dm", colors.normalColor);
+            abAppend(ab, normal_bg, 10);
             abAppend(ab, normal_text, strlen(normal_text));
 
             current_color = -1;
@@ -132,12 +139,14 @@ void editorDrawRows(struct abuf *ab) {
             current_color = color;
             char buf[16];
             int clen = snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", color);
+            abAppend(ab, normal_bg, 10);
             abAppend(ab, buf, clen);
           }
           abAppend(ab, &c[j], 1);
         }
       }
       abAppend(ab, "\x1b[39m", 5);
+      abAppend(ab, normal_bg, 10);
     }
     abAppend(ab, "\x1b[K", 3);
     abAppend(ab, "\r\n", 2);
