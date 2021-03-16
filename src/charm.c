@@ -448,6 +448,9 @@ static void editorCenter(void) {
 }
 
 void editorInsertChar(int c) {
+  E.current_word[E.current_word_len] = c;
+  E.current_word_len++;
+
   if (E.cy == E.numrows) {
     editorInsertRow(E.numrows, "", 0);
   }
@@ -665,6 +668,30 @@ void editorFind() {
 
 /*** output ***/
 
+void resetCurrentWord() {
+  for (int i = 0; i < E.current_word_len; i++)
+    E.current_word[i] = '\0';
+  E.current_word_len = 0;
+}
+
+void editorAutoComplete() {
+  char words[10][20] = { "let", "fn", "break", "return", "append", "println!", "use", "for", "while", "else" }; 
+
+  for (int i = 0; i < 10; i++) {
+    int match = 1;
+    for (int j = 0; j < E.current_word_len; j++) {
+      match = match && (E.current_word[j] == words[i][j]);
+    }
+    if (match) {
+      for (int k = 0; k < E.current_word_len; k++)
+        editorDeleteChar();
+      editorRowAppendString(&E.row[E.cy], words[i], strlen(words[i]));
+      // E.cx += strlen(words[i]);
+      break;
+    }
+  }
+}
+
 /*** input ***/
 
 char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
@@ -748,6 +775,36 @@ void editorProcessKeypress() {
   int c = editorReadKey();
   if (E.normal) {
     // NORMAL
+    
+    if (E.replace_char) {
+      E.row[E.cy].chars[E.cx] = c;
+      editorUpdateRow(&E.row[E.cy]);
+      E.replace_char = 0;
+      return;
+    }
+
+    if (E.find_mode == 1) {
+      for (int i = E.cx+1; i < E.row[E.cy].size; i++) {
+        if (E.row[E.cy].chars[i] == c) {
+          E.cx = i;
+          E.find_mode = 0;
+          return;
+        }
+      }
+      E.find_mode = 0;
+      return;
+    } else if (E.find_mode == 2) {
+      for (int i = E.cx+1; i >= 0; i--) {
+        if (E.row[E.cy].chars[i] == c) {
+          E.cx = i;
+          E.find_mode = 0;
+          return;
+        }
+      }
+      E.find_mode = 0;
+      return;
+    }
+
     switch (c) {
     /* Comamnd Mode */
     case ':':
@@ -755,7 +812,7 @@ void editorProcessKeypress() {
       char *response = editorPrompt(":%s", NULL);
       if (strcmp(response, "w") == 0) {
         editorSave();
-      } else if (strcmp(response, "wq") == 0 || strcmp(response, "x")) {
+      } else if (strcmp(response, "wq") == 0 || strcmp(response, "x") == 0) {
         editorSave();
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
@@ -768,6 +825,13 @@ void editorProcessKeypress() {
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(74);
+
+      } else if (strcmp(response, "q!") == 0) {
+        
+        write(STDOUT_FILENO, "\x1b[2J", 4);
+        write(STDOUT_FILENO, "\x1b[H", 3);
+        exit(74);
+      
       } else if (strcmp(response, "source") == 0) {
         parseInitFile();
         break;
@@ -841,6 +905,22 @@ void editorProcessKeypress() {
       editorInsertNewline();
       break;
 
+    case 'r': {
+      E.replace_char = 1;
+      editorSetStatusMessage("Replace (Char)");
+      break;
+    }
+
+    /* Find commands */
+    case 'f': {
+      E.find_mode = 1;          
+      break;
+    }
+
+    case 'F': {
+      E.find_mode = 2;          
+    }
+
       /* Words etc */
     case 'w':
       if (E.normal_mod == 0)
@@ -895,9 +975,19 @@ void editorProcessKeypress() {
       if (E.deletemode) {
         E.deletemode = 0;
         editorKillLine();
+        E.cx = 0;
         break;
       }
       E.deletemode = 1;
+      break;
+
+    case 'x':
+      E.normal_mod = (E.normal_mod == 0) ? 1 : E.normal_mod;
+      while (E.normal_mod != 0) {
+      E.cx++;
+      editorDeleteChar();
+      E.normal_mod--;
+      }
       break;
 
     case 'p':
@@ -907,6 +997,7 @@ void editorProcessKeypress() {
     /* Visual modes */
     case 'V': {
       editorSetStatusMessage("VISUAL LINE");
+      E.visual_line_start = E.cy;
       break;
     }
 
@@ -941,16 +1032,39 @@ void editorProcessKeypress() {
       }
       editorMoveCursor(ARROW_UP);
       break;
+      
+    case 'm':
+      editorSetStatusMessage(E.current_word);
+      break;
 
     case BACKSPACE:
     case ARROW_LEFT:
     case 'h':
       editorMoveCursor(ARROW_LEFT);
       break;
+    case ' ':
     case ARROW_RIGHT:
     case 'l':
       editorMoveCursor(ARROW_RIGHT);
       break;
+
+    case '}':
+      if (E.cy + 10 >= E.numrows) {
+        E.cy = E.numrows-1;
+        break;
+      }
+      E.cy += 10;
+      break;
+
+    case '{':
+      if (E.cy - 10 < 0) {
+        E.cy = 0;
+        break;
+      }
+      E.cy -= 10;
+      break;
+
+    case 'H':
     case '0':
       /* Allow '10j' etc */
       if (E.normal_mod > 0) {
@@ -960,6 +1074,7 @@ void editorProcessKeypress() {
       E.cx = 0;
       break;
 
+    case 'L':
     case '$':
       if (E.cy < E.numrows)
         E.cx = E.row[E.cy].size;
@@ -981,6 +1096,13 @@ void editorProcessKeypress() {
       editorInsertNewline();
       editorAutoIndent();
       break;
+
+    case '.':
+    case ' ':
+      resetCurrentWord();
+      editorInsertChar(c);
+      break;
+
     case 27:
       E.normal = 1;
       editorSetStatusMessage("  NORMAL");
@@ -1033,27 +1155,11 @@ void editorProcessKeypress() {
       editorScroll();
       break;
 
-    case CTRL_KEY('n'):
-      E.cy += 10;
-      editorScroll();
-      break;
-
     case CTRL_KEY('p'):
-      E.cy -= 10;
-      if (E.cy < 0) {
-        E.cy = 0;
-      }
-      editorScroll();
+      resetCurrentWord();
+      editorAutoComplete();
       break;
 
-    case CTRL_KEY('j'):
-      l = editorPrompt("Jump to line: %s", NULL);
-      int line = atoi(l);
-      int change = line - E.cy - 1;
-      E.cy += change;
-      if (E.cy < 0)
-        E.cy = 0;
-      break;
 
     case CTRL_KEY('s'):
       if (E.prefix) {
@@ -1100,6 +1206,7 @@ void editorProcessKeypress() {
 
     case BACKSPACE:
     case DEL_KEY:
+      resetCurrentWord();
       if (c == DEL_KEY || c == CTRL_KEY('d'))
         editorMoveCursor(ARROW_RIGHT);
       editorDeleteChar();
@@ -1132,6 +1239,17 @@ void editorProcessKeypress() {
     }
     quit_times = RCC_QUIT_TIMES;
   }
+  // highlight matchng parens
+  /*if (E.row[E.cy].chars[E.cx] == ')') {
+    editorSetStatusMessage("(");
+    int line = E.cy;
+    for (int i = E.cx; i >= 0; i--) {
+      if (E.row[line].chars[i] == '(') {
+        editorUpdateRow(&E.row[line]);
+        break;
+      }
+    }
+  }*/
 }
 
 /*** init ***/
@@ -1159,9 +1277,19 @@ void initEditor() {
   /* Editor modes */
   E.normal = 1;
   E.normal_mod = 0;
+  E.replace_char = 0;
 
   /* delete modes */
   E.deletemode = 0;
+  E.find_mode = 0;
+
+  /* Visual mode */
+  E.visual_line_start = -1;
+  E.visual_line_end = -1;
+
+  /* Current word */
+  E.current_word[0] = '\0';
+  E.current_word_len = 0;
 
   E.syntax = NULL;
   E.prefix = 0;

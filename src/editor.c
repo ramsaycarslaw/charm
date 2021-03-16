@@ -52,7 +52,7 @@ void editorDrawRows(struct abuf *ab) {
 
     int filerow = y + E.rowoff;
 
-    char normal_bg[13];
+    char normal_bg[12];
     sprintf(normal_bg, "\x1b[48;5;%dm", colors.backgroundColor);
     // draw line number
     char format[16];
@@ -156,7 +156,9 @@ void editorDrawRows(struct abuf *ab) {
 void editorDrawStatusBar(struct abuf *ab) {
   char status_bar[14];
   sprintf(status_bar, "\x1b[38;5;%d;7m", colors.statusColor);
-  abAppend(ab, status_bar, 14);
+  char status_bar_fg[14];
+  sprintf(status_bar_fg, "\x1b[38;5;%d;7m", 244);
+  abAppend(ab, status_bar_fg, 14);
   char status[80], rstatus[80];
   int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
                      E.filename ? E.filename : "[No Name]", E.numrows,
