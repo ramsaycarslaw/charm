@@ -31,8 +31,9 @@
 
 #define HL_HIGHLIGHT_NUMBERS (1 << 0)
 #define HL_HIGHLIGHT_STRINGS (1 << 1)
-#define HL_HIGHLIGHT_FUNC (1 << 10)
-#define HL_HIGHLIGHT_MACROS (1 << 11)
+#define HL_HIGHLIGHT_FUNC (1 << 2)
+#define HL_HIGHLIGHT_MACROS (1 << 3)
+#define HL_TEX_ENV (1 << 4)
 
 /*** data ***/
 
@@ -60,7 +61,7 @@ char *MT_HL_keywords[] = {
     "super",  "init|",  "len|",     "printf|", "println|", "read|",
     "write|", "clock|", "use",      "string|", "number|",  "color|",
     "for",    "while",  "exit|",    "clear|",  "show|",    "Cd|",
-    "Ls|",    "input|", "append|",  "delete|", "var",      NULL};
+    "Ls|",    "input|", "append|",  "delete|", "var", "let", NULL};
 
 char *RUST_HL_extensions[] = {".rs", ".RS", NULL};
 char* RUST_HL_keywords[] = {
@@ -99,7 +100,9 @@ char *TEX_HL_extensions[] = {".tex", NULL};
 char *TEX_HL_keywords[] = {
     "\\usepackage", "\\documentclass", "\\author", "\\title",  "\\centering",
     "\\maketitle",  "\\begin",         "\\end",    "$$|",      "\\newcommand",
-    "equation|",    "figure|",         "theorem|", "tabular|", NULL};
+    "equation|", "equation}|",    "figure|", "figure}|",  "theorem|", "theorem}|", 
+    "tabular|",  "tabular}|", 
+    "document}|", "\\[", "\\]", "&", NULL};
 
 struct editorSyntax HLDB[] = {
     {"C", C_HL_extensions, C_HL_keywords, "//", "/*", "*/",
@@ -112,8 +115,8 @@ struct editorSyntax HLDB[] = {
       HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC | HL_HIGHLIGHT_MACROS },
     {"Python", PY_HL_extensions, PY_HL_keywords, "#", "/*", "*/",
      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
-    {"LaTeX", TEX_HL_extensions, TEX_HL_keywords, "%%", "", "",
-     HL_HIGHLIGHT_STRINGS}};
+    {"LaTeX", TEX_HL_extensions, TEX_HL_keywords, "%", "", "",
+     HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS | HL_TEX_ENV}};
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
@@ -177,6 +180,16 @@ void editorUpdateSyntax(erow *row) {
           row->hl[j] = HL_FUNC;
           j--;
         } 
+      }
+    }
+
+    if (E.syntax->flags & HL_TEX_ENV) {
+      if (c == '\\' && row->size > 1) {
+        while (c != '{' && c != '\n' && c != ' ' ) {
+          c = row->render[i];
+          row->hl[i] = HL_KEYWORD1;
+          i++;
+        }
       }
     }
 
@@ -429,9 +442,11 @@ int editorCountWhitespace(erow *row) {
 }
 
 void editorAutoIndent() {
-  int amount = E.indent * RCC_TAB_STOP;
-  for (int i = 0; i < amount; i++) {
-    editorInsertChar(' ');
+  if (E.cy != 0) {
+    int level = editorCountWhitespace(&E.row[E.cy-1]);
+
+    for (int i = 0; i < level; i++)
+      editorInsertChar(' ');
   }
 }
 
@@ -550,8 +565,9 @@ void editorOpen(char *filename) {
   editorSelectSyntaxHighlight();
 
   FILE *fp = fopen(filename, "r");
-  if (!fp)
-    die("fopen");
+  if (!fp) {
+    fp = fopen (filename, "w");
+  }
   char *line = NULL;
   size_t linecap = 0;
   ssize_t linelen;
@@ -773,7 +789,7 @@ void editorProcessKeypress() {
   static int quit_times = RCC_QUIT_TIMES;
   char *l = NULL;
   int c = editorReadKey();
-  if (E.normal) {
+  if (E.normal && E.vim) {
     // NORMAL
     
     if (E.replace_char) {
@@ -831,12 +847,20 @@ void editorProcessKeypress() {
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(74);
-      
+      } else if (response[0] == ':' && response[1] == 'e') {
+        
+        if (strlen(response) < 3) {
+          editorSetStatusMessage("Specify a file to open!"); 
+          break;
+        }
+        response += 3;
+        printf("got %s\n", response);
+        editorOpen(response);
       } else if (strcmp(response, "source") == 0) {
         parseInitFile();
         break;
       } else {
-        editorSetStatusMessage("Unkown command");
+        editorRunFunction(response);
       }
       break;
 
@@ -894,6 +918,7 @@ void editorProcessKeypress() {
         E.cx = E.row[E.cy].size;
       E.normal = 0;
       editorInsertNewline();
+      editorAutoIndent();
       break;
 
     case 'O':
@@ -903,6 +928,7 @@ void editorProcessKeypress() {
         E.cx = E.row[E.cy].size;
       E.normal = 0;
       editorInsertNewline();
+      editorAutoIndent();
       break;
 
     case 'r': {
@@ -1104,9 +1130,11 @@ void editorProcessKeypress() {
       break;
 
     case 27:
-      E.normal = 1;
-      editorSetStatusMessage("  NORMAL");
-      E.cx--;
+      if (E.vim) {
+        E.normal = 1;
+        editorSetStatusMessage("  NORMAL");
+        E.cx--;
+      }
       break;
     case CTRL_KEY('q'):
       if (E.dirty && quit_times > 0) {
@@ -1282,6 +1310,7 @@ void initEditor() {
   /* delete modes */
   E.deletemode = 0;
   E.find_mode = 0;
+  E.vim = 1;
 
   /* Visual mode */
   E.visual_line_start = -1;

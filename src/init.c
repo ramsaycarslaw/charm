@@ -1,6 +1,7 @@
 // Copyright (C) 2021 ramsaycarslaw
 
 #include "../include/init.h"
+#include "../include/editor.h"
 
 // adjust theme here using ANSI 3/4 bit colors
 int editorSyntaxToColor(int hl) {
@@ -74,7 +75,7 @@ int parseInitFile() {
 
   /* Get the colors from the init file */
   colors.normalColor =
-      AS_NUMBER(interpret("print ((normalColor == nil) ? 7 :  normalColor);"));
+  AS_NUMBER(interpret("print ((normalColor == nil) ? 7 :  normalColor);"));
   colors.commentColor = AS_NUMBER(interpret("print commentColor;"));
   colors.funcColor = AS_NUMBER(interpret("print funcColor;"));
   colors.keyword1Color = AS_NUMBER(interpret("print keyword1Color;"));
@@ -91,6 +92,17 @@ int parseInitFile() {
   colors.linenumColor = AS_NUMBER(interpret("print ((linenumColor == nil) ? 244 : linenumColor);"));
   colors.linenumBGColor = AS_NUMBER(interpret("print linenumBGColor;"));
 
+  E.vim = AS_NUMBER(interpret("print vim;"));
+
   freeVM();
   return 0;
+}
+
+void editorRunFunction(const char *expr) {
+  initVM();
+
+  runFile("/Users/ramsaycarslaw/.charm.mt");
+  interpret(expr);
+
+  freeVM();
 }

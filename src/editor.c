@@ -80,20 +80,7 @@ void editorDrawRows(struct abuf *ab) {
 
     if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
-        abAppend(ab, normal_bg, 10);
-        char welcome[80];
-        int welcomelen = snprintf(welcome, sizeof(welcome),
-                                  "Charm -- version %s", RCC_VERSION);
-        if (welcomelen > E.screencols)
-          welcomelen = E.screencols;
-        int padding = (E.screencols - welcomelen) / 2;
-        if (padding) {
-          abAppend(ab, " ", 1);
-          padding--;
-        }
-        while (padding--)
-          abAppend(ab, " ", 1);
-        abAppend(ab, welcome, welcomelen);
+        abAppend(ab, " ", 1);
       } else {
         abAppend(ab, " ", 1);
       }
@@ -163,9 +150,12 @@ void editorDrawStatusBar(struct abuf *ab) {
   int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
                      E.filename ? E.filename : "[No Name]", E.numrows,
                      E.dirty ? "(modified)" : "");
+
+  float percent = (E.numrows == 0) ? 0 : (E.cy + 1) / E.numrows;
+
   int rlen =
-      snprintf(rstatus, sizeof(rstatus), "%s | %d/%d",
-               E.syntax ? E.syntax->filetype : "text", E.cy + 1, E.numrows);
+      snprintf(rstatus, sizeof(rstatus), "%s | %d,%d %.1f%%",
+               E.syntax ? E.syntax->filetype : "text", E.cy + 1, E.cx, percent);
   if (len > E.raw_screencols)
     len = E.raw_screencols;
   abAppend(ab, status, len);
