@@ -73,7 +73,8 @@ char* RUST_HL_keywords[] = {
   "trait", "true", "type", "unsafe", "use", "where", "while", "async", 
   "await", "dyn", "abstract|", "become|", "box|", "do|", "final|", 
   "macro|", "override|", "priv|", "typeof|", "unsized|", "virtual|", 
-  "yield|", "try|", NULL};
+  "yield|", "try|", "String|", "&str|", "&|", "i8|", "i16|", "i32|",
+  "i64|", "f32|", "f64|", "char|", NULL};
 
 char *PY_HL_extensions[] = {".py", NULL};
 char *PY_HL_keywords[] = {
@@ -162,7 +163,7 @@ void editorUpdateVisual()
   }
   if (E.visualy > E.cy)
   {
-    for (int i = E.cy; i < E.visualy; i++)
+    for (int i = E.cy; i <= E.visualy; i++)
     {
 
       for (int j = 0; j < strlen(E.row[i].chars); j++)
@@ -173,12 +174,64 @@ void editorUpdateVisual()
   }
   else 
   {
-    for (int i = E.visualy; i < E.cy; i++) {
+    for (int i = E.visualy; i <= E.cy; i++) {
       for (int j = 0; j < strlen(E.row[i].chars); j++) {
         E.row[i].hl[j] = HL_VISUAL;
       }
     } 
   }
+}
+
+
+void editorUpdateVisualLine() 
+{
+  // if we have exited visual mode
+  if (E.visualy == -1 || E.visualx == -1) {
+    editorSetStatusMessage("  NORMAL");
+    return;
+  }
+  if (E.visualy > E.cy)
+  {
+    for (int i = E.cy; i <= E.visualy; i++)
+    {
+
+      for (int j = 0; j < strlen(E.row[i].chars); j++)
+      {
+        E.row[i].hl[j] = HL_VISUAL;
+      }
+    }
+  }
+  else 
+  {
+    for (int i = E.visualy; i <= E.cy; i++) {
+      for (int j = 0; j < strlen(E.row[i].chars); j++) {
+        E.row[i].hl[j] = HL_VISUAL;
+      }
+    } 
+  }
+}
+
+// get all the text in the selection
+char* getVisualText() 
+{
+  char* buffer = malloc(sizeof(char)*100000);
+
+  if (E.cx < E.visualx) 
+  {
+    for (int i = E.cy; i <= E.visualy; i++) 
+    {
+      strcat(buffer, E.row[i].chars);
+    }
+  } 
+  else 
+  {
+      for (int i = E.visualy; i <= E.cy; i++ )
+      {
+        strcat(buffer, E.row[i].chars);
+      }
+  }
+
+  return buffer;
 }
 
 void editorUpdateSyntax(erow *row) {
@@ -1058,6 +1111,43 @@ void editorProcessKeypress() {
 
     /* delete modes */
     case 'd':
+      if (E.visualy != -1)
+      {
+
+        strcpy(E.paste, "\0");
+        if (E.visualy != -1)
+        {
+          char *lines = getVisualText();
+
+          strcpy(E.paste, lines);
+
+          free(lines);
+        }
+
+        if (E.visualy < E.cy) 
+        {
+          for (int i = E.visualy; i <= E.cy; i++) 
+          {
+            editorDelRow(i);
+          }
+        } 
+        else 
+        {
+          for (int i = E.cy; i <= E.visualy; i++) 
+          {
+            editorDelRow(i);
+          }
+        }
+
+        E.visualy = -1;
+        E.visualx = -1;
+
+        for (int i = 0; i < E.numrows; i++)
+        {
+          editorUpdateSyntax(&E.row[i]);
+        }
+      }
+
       if (E.deletemode) {
         E.deletemode = 0;
         editorKillLine();
@@ -1076,14 +1166,39 @@ void editorProcessKeypress() {
       }
       break;
 
+    case 'y': 
+    {
+      strcpy(E.paste, "\0");
+      if (E.visualy != -1) 
+      {
+        char* lines = getVisualText();
+
+        strcpy(E.paste, lines);
+
+        free(lines);
+      }
+      E.visualy = -1;
+      E.visualx = -1;
+
+      for (int i = 0; i < E.numrows; i++)
+      {
+        editorUpdateSyntax(&E.row[i]);
+      }
+
+      break;
+    }
+
     case 'p':
+      //TODO --- make this handle newlines 
       editorInsertRow(E.cy, E.paste, strlen(E.paste)); 
       break;
 
     /* Visual modes */
     case 'V': {
-      editorSetStatusMessage("VISUAL LINE");
-      E.visual_line_start = E.cy;
+      editorSetStatusMessage("-- VISUAL LINE --");
+      E.visualx = E.cx;
+      E.visualy = E.cy;
+      editorUpdateVisualLine();
       break;
     }
 
@@ -1134,12 +1249,6 @@ void editorProcessKeypress() {
         E.normal_mod = 0;
         break;
       }
-      if (E.visualx != -1 || E.visualy != -1) {
-        for (int i = 0; i < E.numrows; i++)
-          editorUpdateRow(&E.row[i]);        
-        editorUpdateVisual();
-      }
-
       editorMoveCursor(ARROW_DOWN);
       break;
     case ARROW_UP:
@@ -1370,6 +1479,13 @@ void editorProcessKeypress() {
     }
     quit_times = RCC_QUIT_TIMES;
   }
+
+   if (E.visualx != -1 || E.visualy != -1) {
+        for (int i = 0; i < E.numrows; i++)
+          editorUpdateRow(&E.row[i]);        
+        editorUpdateVisual();
+   }
+      
   // highlight matchng parens
   /*if (E.row[E.cy].chars[E.cx] == ')') {
     editorSetStatusMessage("(");
