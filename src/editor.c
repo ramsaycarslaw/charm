@@ -125,8 +125,13 @@ void editorDrawRows(struct abuf *ab) {
           if (color != current_color) {
             current_color = color;
             char buf[16];
-            int clen = snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", color);
-            abAppend(ab, normal_bg, 10);
+            int clen = 0;
+            /* If its visual mode we change the background */
+            if (color == colors.visualColor) {
+              clen = snprintf(buf, sizeof(buf), "\x1b[48;5;%dm", color);
+            } else {
+              clen = snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", color);
+            }
             abAppend(ab, buf, clen);
           }
           abAppend(ab, &c[j], 1);
@@ -142,7 +147,7 @@ void editorDrawRows(struct abuf *ab) {
 
 void editorDrawStatusBar(struct abuf *ab) {
   char status_bar[14];
-  sprintf(status_bar, "\x1b[38;5;%d;7m", colors.statusColor);
+  sprintf(status_bar, "\x1b[48;5;%d;7m", colors.statusColor);
   char status_bar_fg[14];
   sprintf(status_bar_fg, "\x1b[38;5;%d;7m", 244);
   abAppend(ab, status_bar_fg, 14);
@@ -151,7 +156,7 @@ void editorDrawStatusBar(struct abuf *ab) {
                      E.filename ? E.filename : "[No Name]", E.numrows,
                      E.dirty ? "(modified)" : "");
 
-  float percent = (E.numrows == 0) ? 0 : (E.cy + 1) / E.numrows;
+  float percent = (E.numrows == 0) ? 0 : 100*((E.cy + 1) / E.numrows);
 
   int rlen =
       snprintf(rstatus, sizeof(rstatus), "%s | %d,%d %.1f%%",

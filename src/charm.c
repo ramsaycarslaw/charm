@@ -104,6 +104,15 @@ char *TEX_HL_keywords[] = {
     "tabular|",  "tabular}|", 
     "document}|", "\\[", "\\]", "&", NULL};
 
+char *JAVA_HL_extensions[] = {".java", NULL};
+char *JAVA_HL_keywords[] = {"_", "abstract", "assert ", "boolean|", "Boolean|", "break",
+  "byte", "case", "catch", "char|", "class", "const", "continue", "default", "do", 
+  "double|", "else", "enum ", "extends", "final", "finally", "float|", "for", "goto", 
+  "if", "implements", "import", "instanceof", "int|", "interface", "long|", "native", 
+  "new", "non-sealed", "package", "private", "protected", "public", "return", "short|",
+  "static", "strictfp", "super", "switch", "String|", "synchronized", "this|", "throw",
+  "throws", "transient", "try", "void|", "volatile", "while", "true|", "false|", "isinstanceof", NULL };
+
 struct editorSyntax HLDB[] = {
     {"C", C_HL_extensions, C_HL_keywords, "//", "/*", "*/",
      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
@@ -115,6 +124,8 @@ struct editorSyntax HLDB[] = {
       HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC | HL_HIGHLIGHT_MACROS },
     {"Python", PY_HL_extensions, PY_HL_keywords, "#", "/*", "*/",
      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
+    {"Java", JAVA_HL_extensions, JAVA_HL_keywords, "//", "/*", "*/",
+      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
     {"LaTeX", TEX_HL_extensions, TEX_HL_keywords, "%", "", "",
      HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS | HL_TEX_ENV}};
 
@@ -140,6 +151,34 @@ void editorMoveCursor(int key);
 
 int is_separator(int c) {
   return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
+}
+
+void editorUpdateVisual() 
+{
+  // if we have exited visual mode
+  if (E.visualy == -1 || E.visualx == -1) {
+    editorSetStatusMessage("  NORMAL");
+    return;
+  }
+  if (E.visualy > E.cy)
+  {
+    for (int i = E.cy; i < E.visualy; i++)
+    {
+
+      for (int j = 0; j < strlen(E.row[i].chars); j++)
+      {
+        E.row[i].hl[j] = HL_VISUAL;
+      }
+    }
+  }
+  else 
+  {
+    for (int i = E.visualy; i < E.cy; i++) {
+      for (int j = 0; j < strlen(E.row[i].chars); j++) {
+        E.row[i].hl[j] = HL_VISUAL;
+      }
+    } 
+  }
 }
 
 void editorUpdateSyntax(erow *row) {
@@ -443,10 +482,31 @@ int editorCountWhitespace(erow *row) {
 
 void editorAutoIndent() {
   if (E.cy != 0) {
-    int level = editorCountWhitespace(&E.row[E.cy-1]);
+
+    // case where last line was }
+    if (E.row[E.cy-1].chars[strlen(E.row[E.cy-1].chars)-1] == '}') 
+    {
+      int above = editorCountWhitespace(&E.row[E.cy-1]);
+
+      if (above >= RCC_TAB_STOP) {
+        if (E.row[E.cy-1].chars[0] == '\t') 
+        {
+          editorRowDeleteChar(&E.row[E.cy-1], 0);
+        } else {
+          for (int j = 0; j < RCC_TAB_STOP; j++) 
+          {  
+            editorRowDeleteChar(&E.row[E.cy-1], 0);
+          }
+        }
+      }   
+    }
+
+  // normal indent
+  int level = editorCountWhitespace(&E.row[E.cy-1]);
 
     for (int i = 0; i < level; i++)
       editorInsertChar(' ');
+
   }
 }
 
@@ -787,8 +847,8 @@ void editorMoveCursor(int key) {
 
 void editorProcessKeypress() {
   static int quit_times = RCC_QUIT_TIMES;
-  char *l = NULL;
   int c = editorReadKey();
+  editorUpdateVisual();
   if (E.normal && E.vim) {
     // NORMAL
     
@@ -1027,6 +1087,38 @@ void editorProcessKeypress() {
       break;
     }
 
+    case 27: {
+      if (E.visualy != -1 && E.visualx != -1)
+      {
+        E.cx = E.visualx;
+        E.cy = E.visualy;
+      }
+      E.visualy = -1;
+      E.visualx = -1;
+      for (int i = 0; i < E.numrows; i++) {
+        editorUpdateRow(&E.row[i]);
+      }
+      break;
+    }
+      
+
+    case 'v': {
+      editorSetStatusMessage("-- VISUAL --");          
+      E.visualx = E.cx;
+      E.visualy = E.cy;
+      editorUpdateVisual();
+      break;
+    }
+
+    /* top and bottom */
+    case 'J':
+    case 'G':
+        E.cy = E.numrows-1;
+
+    case 'g':
+    case 'K':
+        E.cy = 0;
+
     /* cursor movement */
     case '\r':
     case ARROW_DOWN:
@@ -1042,6 +1134,12 @@ void editorProcessKeypress() {
         E.normal_mod = 0;
         break;
       }
+      if (E.visualx != -1 || E.visualy != -1) {
+        for (int i = 0; i < E.numrows; i++)
+          editorUpdateRow(&E.row[i]);        
+        editorUpdateVisual();
+      }
+
       editorMoveCursor(ARROW_DOWN);
       break;
     case ARROW_UP:
@@ -1055,6 +1153,11 @@ void editorProcessKeypress() {
         E.cy -= E.normal_mod;
         E.normal_mod = 0;
         break;
+      }
+      if (E.visualx != -1 || E.visualy != -1) {
+        for (int i = 0; i < E.numrows; i++)
+          editorUpdateRow(&E.row[i]);        
+        editorUpdateVisual();
       }
       editorMoveCursor(ARROW_UP);
       break;
@@ -1315,6 +1418,9 @@ void initEditor() {
   /* Visual mode */
   E.visual_line_start = -1;
   E.visual_line_end = -1;
+
+  E.visualx = -1;
+  E.visualy = -1;
 
   /* Current word */
   E.current_word[0] = '\0';

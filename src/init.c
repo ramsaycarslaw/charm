@@ -23,6 +23,8 @@ int editorSyntaxToColor(int hl) {
     return colors.matchColor;
   case HL_OTHER:
     return colors.otherColor;
+  case HL_VISUAL:
+    return colors.visualColor;
   default:
     return colors.normalColor;
   }
@@ -91,6 +93,8 @@ int parseInitFile() {
   colors.backgroundColor = AS_NUMBER(interpret("print backgroundColor;"));
   colors.linenumColor = AS_NUMBER(interpret("print ((linenumColor == nil) ? 244 : linenumColor);"));
   colors.linenumBGColor = AS_NUMBER(interpret("print linenumBGColor;"));
+
+  colors.visualColor = 7;
 
   E.vim = AS_NUMBER(interpret("print vim;"));
 
