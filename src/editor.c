@@ -101,7 +101,6 @@ void editorDrawRows(struct abuf *ab) {
           abAppend(ab, &sym, 1);
           abAppend(ab, "\x1b[m", 3);
 
-
           if (current_color != -1) {
             char buf[16];
             int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_color);
@@ -129,6 +128,7 @@ void editorDrawRows(struct abuf *ab) {
             /* If its visual mode we change the background */
             if (color == colors.visualColor) {
               clen = snprintf(buf, sizeof(buf), "\x1b[48;5;%dm", color);
+              abAppend(ab, "\x1b[38;5;0m", 9);
             } else {
               clen = snprintf(buf, sizeof(buf), "\x1b[38;5;%dm", color);
             }

@@ -34,6 +34,7 @@
 #define HL_HIGHLIGHT_FUNC (1 << 2)
 #define HL_HIGHLIGHT_MACROS (1 << 3)
 #define HL_TEX_ENV (1 << 4)
+#define HL_MD_TITLE (1 << 5)
 
 /*** data ***/
 
@@ -105,6 +106,9 @@ char *TEX_HL_keywords[] = {
     "tabular|",  "tabular}|", 
     "document}|", "\\[", "\\]", "&", NULL};
 
+char *MD_HL_extensions[] = {".md", "README", NULL};
+char *MD_HL_keywords[] = {"-", "+", "#", "##", "###", "####", "#####", NULL};
+
 char *JAVA_HL_extensions[] = {".java", NULL};
 char *JAVA_HL_keywords[] = {"_", "abstract", "assert ", "boolean|", "Boolean|", "break",
   "byte", "case", "catch", "char|", "class", "const", "continue", "default", "do", 
@@ -128,7 +132,9 @@ struct editorSyntax HLDB[] = {
     {"Java", JAVA_HL_extensions, JAVA_HL_keywords, "//", "/*", "*/",
       HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_FUNC},
     {"LaTeX", TEX_HL_extensions, TEX_HL_keywords, "%", "", "",
-     HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS | HL_TEX_ENV}};
+     HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS | HL_TEX_ENV},
+    {"Markdown", MD_HL_extensions, MD_HL_keywords, "%", "```",  "```", HL_HIGHLIGHT_NUMBERS | HL_MD_TITLE}};
+
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
@@ -339,7 +345,7 @@ void editorUpdateSyntax(erow *row) {
 
     if (E.syntax->flags & HL_HIGHLIGHT_MACROS) {
       if (c == '!') {
-        row->hl[i] = HL_OTHER;
+        row->hl[i] = HL_NUMBER;
         int k = i;
         while (row->render[k] != ' ') {
           row->hl[k] = HL_OTHER;
@@ -1100,6 +1106,7 @@ void editorProcessKeypress() {
       break;
 
     case 'b':
+      // handle normal backwords word
       if (E.row[E.cy].chars[E.cx] == ' ') {
         E.cx--;
       }
@@ -1122,8 +1129,8 @@ void editorProcessKeypress() {
           strcpy(E.paste, lines);
 
           free(lines);
-        }
-
+      }
+      
         if (E.visualy < E.cy) 
         {
           for (int i = E.visualy; i <= E.cy; i++) 
@@ -1199,6 +1206,12 @@ void editorProcessKeypress() {
       E.visualx = E.cx;
       E.visualy = E.cy;
       editorUpdateVisualLine();
+      break;
+    }
+  
+    case CTRL_KEY('a'): 
+    {
+      E.row[E.cy].chars[E.cx] = (int)E.row[E.cy].chars[E.cx]+1;
       break;
     }
 

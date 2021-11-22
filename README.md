@@ -10,13 +10,10 @@ Charm is a light-weight terminal based editor for editing MT (and other) files. 
 * Incremental Search
 
 ## Usage
-Charm takes the best (my favorite) features from vi and Emacs to create a balanced editor experience. There are no modes - just type. The shortcuts to not to be chords however this is needed sometimes. The full list of commands are as follows
 
-- `C-x C-s` Save a File
-- `C-x C-c` Quit a File
-- `C-s` Search within file
-- `C-o` Newline no break (vi `o`)
-- `C-c` Change Inner (vi `C`)
+If you are familiar with `vi` you are familiar with charm.
+You could probably use vimtutor to learn it. One difference is begginign and end of line which are H and L respectivley.
+Please note that $ and 0 still work.
 
 ## Customisation
 

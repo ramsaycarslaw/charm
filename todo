@@ -1,8 +1,8 @@
 # ToDo List
 
-- [ ] Visual mode
-- [ ] better copying
+- [x] Visual mode
+- [x] better copying
 - [ ] better deleting
 - [ ] more motions
-- [i] java support
+- [x] java support
 - [ ] fix statusline bug
